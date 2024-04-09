@@ -1,29 +1,46 @@
 package main
 
 type Service struct {
-	A *ServiceA
-	B *ServiceB
-	C *ServiceC
+	*ServiceA
+	*ServiceB
+	*ServiceC
 }
 
-type ServiceA struct{}
+type OneService interface {
+	ServiceAer
+	ServiceBer
+	ServiceCer
+}
 
-type ServiceB struct{}
-
-type ServiceC struct{}
-
-func NewOneService() *Service {
+func NewOneService() OneService {
 	return &Service{
-		A: &ServiceA{},
-		B: &ServiceB{},
-		C: &ServiceC{},
+		&ServiceA{},
+		&ServiceB{},
+		&ServiceC{},
 	}
 }
 
-func NewAnotherService() *Service {
+type AnotherService interface {
+	ServiceAer
+	ServiceBer
+}
+
+func NewAnotherService() AnotherService {
 	return &Service{
-		A: &ServiceA{},
-		B: &ServiceB{},
-		C: nil,
+		&ServiceA{},
+		&ServiceB{},
+		nil,
 	}
+}
+
+func main() {
+	oneService := NewOneService()
+	oneService.DoSomethingA()
+	oneService.DoSomethingB()
+	oneService.DoSomethingC()
+
+	anotherService := NewAnotherService()
+	anotherService.DoSomethingA()
+	anotherService.DoSomethingB()
+	// anotherService.DoSomethingC() この呼び出しはエラーになる
 }
