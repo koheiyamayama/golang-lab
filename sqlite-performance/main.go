@@ -6,11 +6,13 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand"
+	"net/http"
 	"os"
 	"sync"
 	"time"
 
 	_ "github.com/glebarez/go-sqlite"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -24,12 +26,34 @@ var (
 	writeSem *semaphore.Weighted
 )
 
+func init() {
+	level := os.Getenv("LOG_LEVEL")
+
+	switch level {
+	case "DEBUG":
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	case "INFO":
+		slog.SetLogLoggerLevel(slog.LevelInfo)
+	case "WARN":
+		slog.SetLogLoggerLevel(slog.LevelWarn)
+	case "ERROR":
+		slog.SetLogLoggerLevel(slog.LevelError)
+	default:
+		slog.SetLogLoggerLevel(slog.LevelInfo)
+	}
+
+	// prometheus.MustRegister(collectors.NewGoCollector())
+}
+
 func main() {
 	ctx := context.Background()
 	readSem = semaphore.NewWeighted(1)                      // TODO: コマンドライン引数 --read-con で指定された数にする
 	writeSem = semaphore.NewWeighted(1)                     // TODO: コマンドライン引数 --write-con で指定された数にする
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second) // TODO: コマンドライン引数 --sec で指定された秒数にする
 	defer cancel()
+
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe("0.0.0.0:8080", nil)
 
 	db, err := sql.Open("sqlite", "test.db")
 	if err != nil {
@@ -47,16 +71,18 @@ func main() {
 	}
 	slog.DebugContext(ctx, "SQLite version", slog.Any("version", vv))
 
+	// ユーザーを作成
 	result, err := CreateUser(ctx, s)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			slog.InfoContext(ctx, "done")
+			slog.InfoContext(ctx, "create user done")
 			os.Exit(0)
 		}
 
 		slog.ErrorContext(ctx, "Error creating user", slog.Any("error", err))
 		os.Exit(1)
 	}
+
 	slog.InfoContext(ctx, "Result", slog.Any("result", result))
 }
 
@@ -96,23 +122,6 @@ LOOP:
 	slog.DebugContext(ctx, "CreateUser done")
 
 	return nil, nil
-}
-
-func init() {
-	level := os.Getenv("LOG_LEVEL")
-
-	switch level {
-	case "DEBUG":
-		slog.SetLogLoggerLevel(slog.LevelDebug)
-	case "INFO":
-		slog.SetLogLoggerLevel(slog.LevelInfo)
-	case "WARN":
-		slog.SetLogLoggerLevel(slog.LevelWarn)
-	case "ERROR":
-		slog.SetLogLoggerLevel(slog.LevelError)
-	default:
-		slog.SetLogLoggerLevel(slog.LevelInfo)
-	}
 }
 
 func randomString() string {
